@@ -11,6 +11,9 @@ langchain_openai
 langchain_chroma
 langsmith
 
+sentence_transformers
+rank_bm25
+
 matplotlib
 
-rank_bm25
+fastapi

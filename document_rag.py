@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
-
+from reranker import reranked_chunks
 
 from variables import MD_PATH
 from vectorstore import get_vectorstore
@@ -32,7 +32,7 @@ _bm25_cache: dict[str, BM25Retriever] = {}
 
 def get_bm25(
         collection_name: str,
-        top_k: int = 6,
+        top_k: int = 30,
 
 ) -> BM25Retriever:
     if collection_name not in _bm25_cache:
@@ -119,7 +119,7 @@ def build_rag_chain_hyrid(
 
     dense_retreiver = vectorstore.as_retriever(
         search_type="similarity_score_threshold",
-        search_kwargs={"k": 6, "score_threshold": 0.5},
+        search_kwargs={"k": 30, "score_threshold": 0.5},
     )
 
     bm25_retriever = get_bm25(collection_name=collection_name)
@@ -130,7 +130,14 @@ def build_rag_chain_hyrid(
     )
 
     documents = ensemble_retriever.invoke(question)
-    context = "\n\n".join(doc.page_content for doc in documents)
+    chunks_to_reranker = [doc.page_content for doc in documents]
+    final_docs = reranked_chunks(
+        query=question,
+        documents=chunks_to_reranker,
+        top_k = 6
+    )
+    
+    context = "\n\n".join(doc for doc in final_docs)
 
     llm = get_llm()
     rag_chain = RAG_PROMPT | llm | StrOutputParser()
@@ -141,7 +148,7 @@ def build_rag_chain_hyrid(
 
 if __name__ == "__main__":
     ans = build_rag_chain_hyrid(
-        collection_name="header_only",
+        collection_name="header_then_recursive",
         question="When did BIA dismissed the appeal and  adopted "
         "and affirmed the IJ's adverse credibility finding?"
     )

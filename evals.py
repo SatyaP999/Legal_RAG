@@ -21,12 +21,55 @@ LLM_KEY = os.getenv("AI_CREDITS_API_KEY", "")
 
 for collection_name in ["header_only", "header_then_recursive"]:
 
-    dataset_name = f"Legal doc hybrid Q&A - {collection_name}"
+    dataset_name = f"Legal doc hybrid Q&A - {collection_name} - reranked"
     dataset = client.create_dataset(dataset_name=dataset_name)
     client.create_examples(
         dataset_id=dataset.id,
         examples=examples
     )
+
+    def precision_at_k(retrieved, relevant, k):
+        retrieved_k = retrieved[:k]
+        hits = len(set(retrieved_k) & set(relevant))
+        return hits/k
+
+    def relevant_at_k(retrieved, relevant, k):
+        retrieved_k = retrieved[:k]
+        hits = len(set(retrieved_k) & set(relevant))
+        return hits / len(relevant) if relevant else 0.0
+
+    def hit_rate_at_k(retrieved, relevant, k):
+        retrieved_k = retrieved[:k]
+        return 1.0 if set(retrieved_k) & set(relevant) else 0.0
+
+    def reciprocal_rank(retrieved, relevant):
+        for i, doc_id in enumerate(retrieved, start=1):
+            if doc_id in relevant:
+                return 1.0 / i
+
+    def mrr(all_retreieved, all_relevant):
+        rr_scores = [reciprocal_rank(ret, rel) for ret, rel in zip(all_retreieved, all_relevant)]
+        return sum(rr_scores) / len(rr_scores)
+
+
+    def average_precision(retrieved, relevant):
+        if not relevant:
+            return 0.0
+
+        hits = 0
+        sum_precisions = 0.0
+        for i, doc_id in enumerate(retrieved, start=1):
+            if doc_id in relevant:
+                hits += 1
+                precision_at_i = hits/i
+                sum_precisions += precision_at_i
+
+        return sum_precisions / len(relevant)
+
+    def map(all_retreieved, all_relevant):
+        ap_values = [average_precision(ret, rel) for ret, rel in zip(all_retreieved, all_relevant)]
+        return sum(ap_values) / len(ap_values)
+
 
     def correctness(
             inputs: dict,
